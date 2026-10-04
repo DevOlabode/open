@@ -39,8 +39,8 @@ Two halves and one wire contract:
 ## Accounts without a database
 
 Vizably runs no database of its own. A signed-in user's whole account — profile,
-settings, saved scans — lives in storage they already own: one GitHub repository
-or one Google Drive folder. OAuth is used only to identify the user and get an
+settings, saved scans — lives in storage they already own: one GitHub repository.
+OAuth is used only to identify the user and get an
 API token; the user-owned store is the source of truth.
 
 That is what makes the product cheap enough to offer to everyone: no per-user

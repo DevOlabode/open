@@ -1,13 +1,13 @@
 ---
 title: Account storage
-description: Vizably keeps no database — a user's account lives in a GitHub repo or Drive folder they already own.
+description: Vizably keeps no database — a user's account lives in a GitHub repo they already own.
 sidebar:
   order: 4
 ---
 
 Vizably runs **no database of its own**. A signed-in user's entire account —
-profile, settings, saved scans — lives in storage they already own: one GitHub
-repository, or one Google Drive folder.
+profile, settings, saved scans — lives in one GitHub repository they already
+own.
 
 OAuth is used only to *identify* the user and obtain an API token. The
 user-owned store is the source of truth.
@@ -18,13 +18,14 @@ portable — it moves between devices, and it survives Vizably.
 
 ## The connection flow
 
-**Sign in → discover or create → validate → load or init.**
+**Sign in → discover or create → load or init.** Connect is one button: the
+user never names or picks a repository.
 
-1. The user connects GitHub or Google via OAuth.
+1. The user signs in with GitHub.
 2. Vizably **discovers** an existing account store by looking for
    `vizably.json` — never by matching the repository name. It checks the
-   store recorded in the session first, then `viz_scans`, then lists the
-   user's repositories as a fallback. If nothing is found, it **creates**
+   store recorded in the session first, then `GET`s `viz_scans`, then lists
+   the user's repositories as a fallback. If nothing is found, it **creates**
    the next default location: `viz_scans`, then `viz_scans-2`, `viz_scans-3`,
    … if that name is taken. There is no name field and no repository picker;
    a chooser appears only when discovery finds two or more stores.
@@ -32,13 +33,11 @@ portable — it moves between devices, and it survives Vizably.
 4. Vizably either loads the existing account or initialises the store.
 
 GitHub's own permissions remain the account ACL — Vizably adds no extra
-ownership check. Google Drive follows the same resolution model, via the
-client-side Google Picker, because the `drive.file` scope cannot browse
-existing folders.
+ownership check.
 
 ## On-disk layout
 
-Rooted at the repository root, or the selected Drive folder:
+Rooted at the repository root:
 
 ```
 <storage root>/
@@ -62,8 +61,8 @@ Field rules that matter:
 
 - **`account.id` is a random UUID** minted at init and never changed. Provider
   login and email are display only.
-- **Record stable provider ids**, not names — repository node id, Drive folder
-  id, owner id. Names change; ids do not.
+- **Record stable provider ids**, not names — repository node id, owner
+  id. Names change; ids do not.
 - **`schemaVersion` is for breaking changes.** A companion
   `minReaderSchemaVersion` lets a newer writer mark a store unreadable by
   too-old clients, so an old client reports "incompatible" instead of corrupting
@@ -72,11 +71,11 @@ Field rules that matter:
   reconcile — do not fail.
 - **Never store OAuth tokens, refresh tokens, API keys or any secret.** Tokens
   are encrypted at rest in the session (AES-256-GCM) and never written to the
-  user's repository or folder.
+  user's repository.
 
 ## The fit-check
 
-Given a selected storage, the backend returns a status, an optional reason, and
+Given a discovered or created store, the backend returns a status, an optional reason, and
 probed capabilities.
 
 | Condition | Status |
@@ -104,10 +103,8 @@ expected rather than exceptional.
   be stale — another device may have initialised in between.
 - **GitHub writes use the blob `sha`** for optimistic concurrency, and prefer a
   single commit carrying every changed file. On a stale-sha conflict, refetch
-  and retry.
-- **Drive has no multi-file transaction.** Write the immutable scan file first,
-  so truth is never lost, then update the caches using ETag or generation
-  preconditions and let load-time reconciliation heal any gap.
+  and retry. Write the immutable scan file first, so truth is never lost, and
+  let load-time reconciliation heal any gap in the caches.
 
 ## Identity and disclosure
 
@@ -146,14 +143,8 @@ a given `owner/repo` via the Apps API before writing
 The auth/storage API lives under `/api/auth/*`. `backend/README.md` in the
 repository keeps the endpoint table current — read that rather than this page
 for the exact routes, since this is the part of Vizably still changing
-fastest. Two things worth knowing going in:
+fastest. Worth knowing going in:
 
-- **Google is not implemented yet.** `/api/auth/google` and its callback
-  return `501` today, and
-  [issue #111](https://github.com/codrlabs/vizably/issues/111) tracks
-  dropping Google sign-in from the near-term plan rather than finishing it —
-  treat the Drive side of this page as the target design, not current
-  behavior.
 - **Discovery and creation are separate calls.** `GET
   /api/auth/storage/discover` finds existing stores;
   `POST /api/auth/storage/create` creates a new private repository. Every
@@ -167,5 +158,5 @@ fastest. Two things worth knowing going in:
 - [ ] `index.json` and `summary` treated as caches, rebuilt on load
 - [ ] Fit-check returns status, reason and capabilities
 - [ ] `init` revalidates and conditionally creates the manifest
-- [ ] GitHub writes use blob `sha`; Drive writes use generation or ETag
+- [ ] GitHub writes use blob `sha`
 - [ ] No tokens or secrets ever written into the store
