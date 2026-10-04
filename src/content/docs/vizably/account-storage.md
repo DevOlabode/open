@@ -18,14 +18,23 @@ portable — it moves between devices, and it survives Vizably.
 
 ## The connection flow
 
-**Browse → select → validate → load or init.**
+**Sign in → discover or create → validate → load or init.**
 
 1. The user connects GitHub or Google via OAuth.
-2. They see storage they already have and pick one. GitHub repositories are
-   listed by the backend; Drive uses the client-side Google Picker, because the
-   `drive.file` scope cannot browse existing folders.
-3. Vizably runs a **fit-check** against the selection.
+2. Vizably **discovers** an existing account store by looking for
+   `vizably.json` — never by matching the repository name. It checks the
+   store recorded in the session first, then `viz_scans`, then lists the
+   user's repositories as a fallback. If nothing is found, it **creates**
+   the next default location: `viz_scans`, then `viz_scans-2`, `viz_scans-3`,
+   … if that name is taken. There is no name field and no repository picker;
+   a chooser appears only when discovery finds two or more stores.
+3. Vizably runs a **fit-check** against the store.
 4. Vizably either loads the existing account or initialises the store.
+
+GitHub's own permissions remain the account ACL — Vizably adds no extra
+ownership check. Google Drive follows the same resolution model, via the
+client-side Google Picker, because the `drive.file` scope cannot browse
+existing folders.
 
 ## On-disk layout
 
@@ -111,6 +120,16 @@ deleting a scan removes the file and refreshes the caches, but **GitHub
 history may still contain the deleted blob** unless history is rewritten. Do
 not claim permanence you cannot deliver.
 
+Deletion comes in two sizes:
+
+- **One scan** — `DELETE /api/scans/:id` removes the immutable
+  `scans/<scanId>_<host>.json` and refreshes `scans/index.json` and the
+  manifest `summary`.
+- **Every scan** — `DELETE /api/scans` removes all scan files under `scans/`
+  (keeping `index.json`), then writes an empty index and
+  `summary.scanCount: 0`. The manifest identity and the repository itself
+  remain.
+
 ## GitHub access is a GitHub App, not a plain OAuth scope
 
 GitHub storage is authorized through a **GitHub App** (`GITHUB_APP_ID` +
@@ -135,10 +154,11 @@ fastest. Two things worth knowing going in:
   dropping Google sign-in from the near-term plan rather than finishing it —
   treat the Drive side of this page as the target design, not current
   behavior.
-- **GitHub repository creation exists** (`POST /api/auth/storage/create`,
-  plus a name-availability check) in addition to the browse/validate/load
-  flow described above — the connect UI can create a new private repository
-  for a user who doesn't have one yet, not just pick from existing ones.
+- **Discovery and creation are separate calls.** `GET
+  /api/auth/storage/discover` finds existing stores;
+  `POST /api/auth/storage/create` creates a new private repository. Every
+  repository Vizably creates carries the `viz_` prefix (`viz_scans` by
+  default), and the user never types a name.
 
 ## Implementer checklist
 
